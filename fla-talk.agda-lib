@@ -1,0 +1,5 @@
+name: fla-talk
+depend:
+  standard-library
+  functional-linear-algebra
+include: src
