@@ -160,20 +160,11 @@ class MatrixOfNumbers(Generic[A])
 First step: define a type for a matrix
 --------------------------------------
 
-A matrix can be seen as a table of numbers:
+Given this constructor we can create the following matrix.
 
-~~~agda
-data MatrixOfNumbers (A : Set) : Set where
-    ConstructMatrixOfNumbers : List (List A) → MatrixOfNumbers A
-~~~
-
-\undovspacepause
-\undovspacepause
 $$
 M_n = \begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{bmatrix}
 $$
-
-. . .
 
 ```agda
 Mₙ : MatrixOfNumbers ℕ -- Natural numbers
@@ -184,7 +175,6 @@ Mₙ = ConstructMatrixOfNumbers [ [ 1 , 2 , 3 ] , [ 4 , 5 , 6 ] ]
 
 Conventions used in this talk : `A` is a type, $M_{i}$ is a matrix, `m n p q`
 are natural numbers, and `u v x y` are vectors.
-
 
 
 What can we do with a matrix?
@@ -292,8 +282,7 @@ diag u = λ v → zipWith _ (_*_) u v
 Let's define a matrix as a function!
 ------------------------------------
 
-We can define a matrix as just a function then that takes a vector and
-returns a new one.
+We can define a matrix as a function that takes a vector and returns a new vector.
 
 ```agda
 data FunctionalMatrix (A : Set) : Set where
@@ -709,11 +698,11 @@ _ = ConstructSFM (λ v → replicate 1ᶠ) (λ v → replicate 1ᶠ)
 
 . . .
 
-- Linearity : $f(u +^V v) = 1 \ \ \neq \ \ f(u) +^V f(v) = 1 +^V 1 = 2$
+- Linearity : $f(u +^V v) = \vec{1} \ \ \neq \ \ f(u) +^V f(v) = \vec{1} +^V \vec{1} = \vec{2}$
 
 . . .
 
-- Homogeneity : $f(c \circ^V v) = 1 \ \ \neq \ \ c \circ^V f(v) = c \circ^V 1 = c$
+- Homogeneity : $f(c \circ^V v) = \vec{1} \ \ \neq \ \ c \circ^V f(\vec{v}) = c \circ^V \vec{1} = \vec{c}$
 
 
 How do we ensure that our functions are linear?
