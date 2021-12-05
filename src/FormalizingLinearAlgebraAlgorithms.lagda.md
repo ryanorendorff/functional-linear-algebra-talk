@@ -2,7 +2,7 @@
 title: Functional Programming + Dependent Types $≡$ Verified Linear Algebra
 subtitle: github.com/ryanorendorff/functional-linear-algebra-talk
 author: Ryan Orendorff
-date: September 10th, 2021
+date: 2021
 theme: metropolis
 monofont: "Iosevka"
 header-includes: |
@@ -94,6 +94,21 @@ pattern [_,_,_] x y z = x ∷ y ∷ z ∷ []
 
 pattern [_,_]ⱽ y z = y ∷ⱽ z ∷ⱽ []ⱽ
 pattern [_,_,_]ⱽ x y z = x ∷ⱽ y ∷ⱽ z ∷ⱽ []ⱽ
+
+iterate : ℕ → A → (A → A) → List A
+iterate 0 x f = x ∷ []
+iterate (suc n) x f = x ∷ iterate n (f x) f
+
+_·_ = _·ᴹₗ_
+_·ˡ_ = _·ˡᵐ_
+
+infixr 20 _·_
+
+postulate
+  TrustMe! : A
+
+Homework = TrustMe!
+MoreHomework! = Homework
 ```
 -->
 
@@ -356,10 +371,10 @@ This type encapsulates the function nature of a matrix, but we often
 need the transpose as well.
 
 ```agda
-data FunctionalMatrixWithTranpose (A : Set) : Set where
+data FunctionalMatrixWithTranspose (A : Set) : Set where
     ConstructFMT :  (List A → List A) -- Forward function
                  → (List A → List A) -- Transpose function
-                 → FunctionalMatrixWithTranpose A
+                 → FunctionalMatrixWithTranspose A
 ```
 
 . . .
@@ -368,7 +383,7 @@ We can now define the identity matrix with the transpose matrix function,
 which is also the identity.
 
 ```agda
-Mᵢ,ₜ : FunctionalMatrixWithTranpose A
+Mᵢ,ₜ : FunctionalMatrixWithTranspose A
 Mᵢ,ₜ = ConstructFMT (list-identity) (list-identity)
 ```
 
@@ -421,7 +436,7 @@ Is this true for `FunctionalMatrixWithTranspose`?
 f₁ : List ℕ → List ℕ
 f₁ v = []
 
-Mᵣ : FunctionalMatrixWithTranpose ℕ
+Mᵣ : FunctionalMatrixWithTranspose ℕ
 Mᵣ = ConstructFMT f₁ f₁
 ```
 
@@ -789,10 +804,10 @@ Fields define more than just `+` and `*`; a field has some properties.
 ~~~
 
 
-Proofs can be used to rewrite terms
------------------------------------
+How do we generate these proofs? By composing them!
+---------------------------------------------------
 
-Let's use the `Field` proofs we have to construct a new proof.
+We can prove `(b + 0ᶠ) * 1ᶠ ≡ b` from simpler (axiomatic) statements.
 
 <!--
 ```agda
@@ -1000,7 +1015,7 @@ Mₙₒ = ConstructLinearMatrix (idₗ) (diagₗ (replicate 0ᶠ))
 
 . . .
 
-We have mixed up the forward/transpose pairing between our two linear functions.
+We have mixed up the forward/transpose pairing.
 
 \undovspacepause
 \undovspacepause
@@ -1026,8 +1041,8 @@ $$
 $$
 
 
-Finally we reach our goal!
---------------------------
+Finally we reach our goal of correct by construction matrices!
+--------------------------------------------------------------
 
 If we require the user to prove the inner product property, we can _finally_
 create a "correct by construction" functional matrix.
@@ -1037,7 +1052,7 @@ data Mat_×_ {A : Set} ⦃ F : Field A ⦄ (m n : ℕ) : Set where
   ⟦_,_,_⟧ :  (M  : n ⊸ m )
           → (Mᵀ : m ⊸ n )
           → (p : (x : Vec A m) → (y : Vec A n)
-                → ⟨ x , M ·ˡᵐ y ⟩ ≡ ⟨ y , Mᵀ ·ˡᵐ x ⟩ )
+                → ⟨ x , M ·ˡ y ⟩ ≡ ⟨ y , Mᵀ ·ˡ x ⟩ )
           → Mat m × n
 ~~~
 
@@ -1094,22 +1109,6 @@ We can do a few things with a matrix:
 
 We have not done matrix-matrix multiplication, can we implement it with our
 new definition?
-
-<!--
-```agda
-iterate : ℕ → A → (A → A) → List A
-iterate 0 x f = x ∷ []
-iterate (suc n) x f = x ∷ iterate n (f x) f
-
-_·_ = _·ᴹₗ_
-_·ˡ_ = _·ˡᵐ_
-
-infixr 20 _·_
-
-postulate
-  TrustMe! : A
-```
--->
 
 
 Implementing matrix-matrix multiply on functional matrices
@@ -1181,8 +1180,8 @@ g ∘ˡ h = record {
 
 \undovspacepause
 ```agda
-  ; f[u+v]≡f[u]+f[v] = TrustMe!
-  ; f[c*v]≡c*f[v] = TrustMe! }
+  ; f[u+v]≡f[u]+f[v] = Homework
+  ; f[c*v]≡c*f[v] = Homework }
 ```
 
 
@@ -1206,15 +1205,15 @@ Which we can directly encode in Agda.
 
 ```agda
 _*ᴹ_ : ⦃ F : Field A ⦄ → Mat m × n → Mat n × p → Mat m × p
-M₁ *ᴹ M₂ =
-  ⟦ (Mat-to-⊸ M₁) ∘ˡ (Mat-to-⊸ M₂)
-  , (Mat-to-⊸ (M₂ ᵀ)) ∘ˡ (Mat-to-⊸ (M₁ ᵀ))
+M₂ *ᴹ M₁ =
+  ⟦ (Mat-to-⊸ M₂) ∘ˡ (Mat-to-⊸ M₁)
+  , (Mat-to-⊸ (M₁ ᵀ)) ∘ˡ (Mat-to-⊸ (M₂ ᵀ))
 ```
 
 . . .
 
 ```agda
-  , TrustMe!
+  , MoreHomework!
   ⟧
 ```
 
@@ -1379,7 +1378,7 @@ postulate
 -->
 
 
-We cna define equivalent forms of a linear equation
+We can define equivalent forms of a linear equation
 ---------------------------------------------------
 
 We had defined our step function as
@@ -1402,11 +1401,11 @@ step' α M v fₑ = fₑ -ⱽ α ∘ⱽ (M ᵀ · M · fₑ -ⱽ M ᵀ · v)
 ```
 
 
-Proving the two `step`s are in lock step
----------------------------------------
+Proving the two `step`s are in lock step for better performance
+---------------------------------------------------------------
 
 We can prove `step` and `step'` are the same by demonstrating
-that the same inputs to `step` and `step'` lead to the same result.[^4]
+that the same inputs to `step` and `step'` lead to the same result.
 
 ```agda
 proof :  ⦃ F : Field A ⦄ → (α : A)
@@ -1424,8 +1423,9 @@ proof α M v fₑ = begin
   fₑ -ⱽ α ∘ⱽ (M ᵀ · M · fₑ -ⱽ M ᵀ · v) ∎
 ```
 
-[^4]: Proving that `step` and `step'` are the same is an extensional
-statement, and requires function extensionality.
+. . .
+
+We can _rewrite/optimize our program while preserving correctness_.
 
 
 Have we accomplished our goal?
@@ -1458,7 +1458,7 @@ correctness built in.
 
 ::: incremental
 
-- Regular functions (Python: `PyOp` library)
+- Regular functions (Python: `PyOp`/`PyLops`/many other libraries)
 - Size-typed functions (Haskell: `convex` library)
 - Linear functions (Agda: `FLA` library)
 
