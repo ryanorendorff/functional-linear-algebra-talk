@@ -2,7 +2,7 @@
 title: Functional Programming + Dependent Types $≡$ Verified Linear Algebra
 subtitle: github.com/ryanorendorff/functional-linear-algebra-talk
 author: Ryan Orendorff
-date: September 10th, 2021
+date: October 29th, 2021
 theme: metropolis
 monofont: "Iosevka"
 header-includes: |
@@ -70,7 +70,7 @@ open import Data.List hiding (replicate; sum; map)
 open import Data.Vec using (Vec; replicate; map) renaming ([] to []ⱽ; _∷_ to _∷ⱽ_)
 open import Data.Bool using (Bool)
 
-open import Function using (id)
+open import Function using (id; _∘_)
 
 open import FLA.Algebra.Structures
 open import FLA.Algebra.LinearAlgebra
@@ -95,6 +95,24 @@ pattern [_,_,_] x y z = x ∷ y ∷ z ∷ []
 pattern [_,_]ⱽ y z = y ∷ⱽ z ∷ⱽ []ⱽ
 pattern [_,_,_]ⱽ x y z = x ∷ⱽ y ∷ⱽ z ∷ⱽ []ⱽ
 ```
+
+```agda
+iterate : ℕ → A → (A → A) → List A
+iterate 0 x f = x ∷ []
+iterate (suc n) x f = x ∷ iterate n (f x) f
+
+_·_ = _·ᴹₗ_
+_·ˡ_ = _·ˡᵐ_
+
+infixr 20 _·_
+
+postulate
+  TrustMe! : A
+
+Homework = TrustMe!
+MoreHomework! = Homework
+```
+
 -->
 
 We want to be able to enforce that a user cannot create an incorrect matrix,
@@ -102,7 +120,7 @@ or use a matrix improperly.
 
 . . .
 
-There are a few ways things can go wrong:
+There are a few ways one can go wrong:
 
 - Improper sizing
 
@@ -115,13 +133,17 @@ There are a few ways things can go wrong:
 
 - Improper data types
 
-```haskell
-      testMatrix = Matrix [ (Just 5) ]
+```python
+      np.array([1, "a"])
 ```
 
 . . .
 
 Plus a few more surprising errors to get to later!
+
+. . .
+
+For this talk, we will mostly be using Agda syntax ("Haskell-like").
 
 
 First step: define a type for a matrix
@@ -142,8 +164,6 @@ which is equivalent to the Haskell
 data MatrixOfNumbers a = ConstructMatrixOfNumbers [[a]]
 ```
 
-<!-- optional:python
-
 and in Python
 
 ```python
@@ -153,8 +173,6 @@ A = TypeVar['A']
 class MatrixOfNumbers(Generic[A])
     matrix : List[List[A]]
 ```
-
--->
 
 
 First step: define a type for a matrix
@@ -275,52 +293,40 @@ or alternatively as
 
 ~~~agda
 diag u = λ v → zipWith _ (_*_) u v
--- zipWith in Agda has an extra parameter we don't need
 ~~~
 
 
-Let's define a matrix as a function!
-------------------------------------
+Let's define a matrix as a pair of functions!
+---------------------------------------------
 
-We can define a matrix as a function that takes a vector and returns a new vector.
+This type encapsulates the function nature of a matrix, but we often
+need the transpose as well.
 
 ```agda
 data FunctionalMatrix (A : Set) : Set where
-    ConstructFunctionalMatrix : (List A → List A) → FunctionalMatrix A
+    ConstructFM :  (List A → List A) -- Forward function
+                 → (List A → List A) -- Transpose function
+                 → FunctionalMatrix A
 ```
 
 . . .
 
-Now we can construct the identity matrix as follows:
+We can now define the identity matrix with the transpose matrix function,
+which is also the identity.
 
 ```agda
-Mᵢ : FunctionalMatrix A
-Mᵢ = ConstructFunctionalMatrix (list-identity)
+Mᵢ,ₜ : FunctionalMatrix A
+Mᵢ,ₜ = ConstructFM (list-identity) (list-identity)
 ```
 
-. . .
+We can reproduce matrix-vector, transpose, and matrix-matrix operations
+-----------------------------------------------------------------------
 
-This addresses the matrix-vector ability of a matrix, what else can we
-tackle functionally?
-
-
-We have matrix-vector multiply down, can we do more?
-----------------------------------------------------
-
-With our functional definition of a matrix, we can do other operations like
-matrix-matrix multiply.
-
-\undovspacepause
-\undovspacepause
-$$
-(M_1 * M_2) v = M_1(M_2(v))
-$$
-
-. . .
+Matrix-vector can be done by applying the forward function directly.
 
 ```agda
 _·ᶠ_ : FunctionalMatrix A → List A → List A
-ConstructFunctionalMatrix f ·ᶠ l = f l
+(ConstructFM f t) ·ᶠ l = f l
 ```
 
 <!--
@@ -332,47 +338,22 @@ infixr 10 _·ᶠ_
 
 . . .
 
-\vspace{-0.5em}
+Matrix-transpose is just switching the two functions around.
+
 ```agda
-apply_two_matrices : FunctionalMatrix A → FunctionalMatrix A
-                   → List A → List A
-apply_two_matrices M₁ M₂ v = M₁ ·ᶠ M₂ ·ᶠ v
+transpose : FunctionalMatrix A → FunctionalMatrix A
+transpose (ConstructFM f t) = ConstructFM t f
 ```
 
 . . .
 
-Hmm that looks a lot like composition:
+And matrix-matrix turns out to be function composition!
 
 ```agda
 _∘ᶠ_ : FunctionalMatrix A → FunctionalMatrix A → FunctionalMatrix A
-M₁ ∘ᶠ M₂ = ConstructFunctionalMatrix (apply_two_matrices M₁ M₂)
+(ConstructFM f₂ t₂) ∘ᶠ (ConstructFM f₁ t₁) =
+    ConstructFM (f₂ ∘ f₁) (t₁ ∘ t₂) -- Note transpose switch!
 ```
-
-
-We often need the transpose matrix at the same time
----------------------------------------------------
-
-This type encapsulates the function nature of a matrix, but we often
-need the transpose as well.
-
-```agda
-data FunctionalMatrixWithTranpose (A : Set) : Set where
-    ConstructFMT :  (List A → List A) -- Forward function
-                 → (List A → List A) -- Transpose function
-                 → FunctionalMatrixWithTranpose A
-```
-
-. . .
-
-We can now define the identity matrix with the transpose matrix function,
-which is also the identity.
-
-```agda
-Mᵢ,ₜ : FunctionalMatrixWithTranpose A
-Mᵢ,ₜ = ConstructFMT (list-identity) (list-identity)
-```
-
-
 
 Intuition check : convert a functional matrix into a number matrix
 ------------------------------------------------------------------
@@ -399,7 +380,7 @@ identity' v = replicate (len v) 1 *ⱽ v
 where `replicate` creates a list of 1s and `*ⱽ` multiplies element-wise.
 
 
-Is `FunctionalMatrixWithTranspose` "correct by construction"?
+Is `FunctionalMatrix` "correct by construction"?
 -------------------------------------------------------------
 
 <!--
@@ -413,7 +394,7 @@ Our original goal was
 
 > Correct by construction linear algebra; equivalent to $\mathbb{R}$ matrices
 
-Is this true for `FunctionalMatrixWithTranspose`?
+Is this true for `FunctionalMatrix`?
 
 . . .
 
@@ -421,8 +402,8 @@ Is this true for `FunctionalMatrixWithTranspose`?
 f₁ : List ℕ → List ℕ
 f₁ v = []
 
-Mᵣ : FunctionalMatrixWithTranpose ℕ
-Mᵣ = ConstructFMT f₁ f₁
+Mᵣ : FunctionalMatrix ℕ
+Mᵣ = ConstructFM f₁ f₁
 ```
 
 . . .
@@ -478,33 +459,6 @@ data SizedMatrix (A : Set) (m n : ℕ) : Set where
                          → SizedMatrix A m n
 ```
 
-Previously this would be done with a runtime check.
-
-. . .
-
-In Haskell, we would write this as
-
-```haskell
-data SizedMatrix (A :: *) (m :: Nat) (n :: Nat) where
-    ConstructSizedMatrix :: (KnownNat m, KnownNat n)
-                         => (Vec A n → Vec A m) -- Forward function
-                         -> (Vec A m → Vec A n) -- Transpose function
-                         -> SizedMatrix A m n
-```
-
-
-Use functions on Vec to ensure that the shapes match
-----------------------------------------------------
-
-We can define a matrix type where the shapes are preserved.
-
-~~~agda
-data SizedMatrix (A : Set) (m n : ℕ) : Set where
-    ConstructSizedMatrix :  (Vec A n → Vec A m) -- Forward function
-                         → (Vec A m → Vec A n) -- Transpose function
-                         → SizedMatrix A m n
-~~~
-
 . . .
 
 We can now define our identity matrix again.
@@ -517,6 +471,11 @@ id : (A : Set) → A → A
 Mᵢ,ₛ : SizedMatrix A n n
 Mᵢ,ₛ = ConstructSizedMatrix id id -- id : Vec A n → Vec A n
 ```
+
+. . .
+
+With this setup, we have converted a _run time check_ (vector shape) to a
+_compile time check_.
 
 
 Intuition check: can we encode matrices that are not possible to write out?
@@ -604,31 +563,6 @@ data SizedFieldMatrix (A : Set) ⦃ F : Field A ⦄ (m n : ℕ) : Set where
                  → (Vec A m → Vec A n) -- Transpose function
                  → SizedFieldMatrix A m n
 ```
-
-. . .
-
-in Haskell this would be written as
-
-```haskell
-data SizedFieldMatrix A (m :: Nat) (n :: Nat) where
-    ConstructSFM :: (KnownNat m, KnownNat n, Field A)
-                 => (Vec A n → Vec A m) -- Forward function
-                 -> (Vec A m → Vec A n) -- Transpose function
-                 -> SizedFieldMatrix A m n
-```
-
-
-We can define matrices that operate on Fields only
---------------------------------------------------
-
-We can restrict our `A` type to having a defined version of `+` and `*`.
-
-~~~agda
-data SizedFieldMatrix (A : Set) ⦃ F : Field A ⦄ (m n : ℕ) : Set where
-    ConstructSFM :  (Vec A n → Vec A m) -- Forward function
-                 → (Vec A m → Vec A n) -- Transpose function
-                 → SizedFieldMatrix A m n
-~~~
 
 The card example can no longer be constructed, but the identity matrix still
 can be constructed.
@@ -734,70 +668,24 @@ record _⊸_ {A : Set} ⦃ F : Field A ⦄ (m n : ℕ) : Set where
 
 . . .
 
-with this we could define our matrices using linear functions.
-
-```agda
-data LinearMatrix {A : Set} ⦃ F : Field A ⦄ (m n : ℕ) : Set where
-  ConstructLinearMatrix : (n ⊸ m) → (m ⊸ n) → LinearMatrix m n
-```
-
-
-What is this `≡` thing?
------------------------
-
-The `≡` sign means that two things are equal[^2] in the sense that the left
-and the right side are written with the same order of constructors[^3].
-
-. . .
-
-The definition of `≡` is
+And we define the helper `·ˡ` to apply a linear function
 
 ~~~agda
-data _≡_ (x : A) : A → Set where
-  refl : x ≡ x
-~~~
-
-[^2]: Homogenously
-[^3]: Their normal forms are equivalent
-
-
-Fields must follow some properties on top of defining `+` and `*`
------------------------------------------------------------------
-
-Fields define more than just `+` and `*`; a field has some properties.
-
-~~~agda
-+-assoc   : (a b c : A) → a + (b + c) ≡ (a + b) + c
-+-comm    : (a b : A)   → a + b ≡ b + a
-+0ᶠ       : (a : A)     → a + 0ᶠ ≡ a
-+-inv     : (a : A)     → (- a) + a ≡ 0ᶠ
-~~~
-
-. . .
-
-~~~agda
-*-assoc   : (a b c : A) → a * (b * c) ≡ (a * b) * c
-*-comm    : (a b : A)   → a * b ≡ b * a
-*1ᶠ       : (a : A)     → a * 1ᶠ ≡ a
-*-inv     : (a : A)     → (a ≢ 0ᶠ) → (a ⁻¹) * a ≡ 1ᶠ
-~~~
-
-. . .
-
-~~~agda
-*-distr-+ : (a b c : A) → a * (b + c) ≡ (a * b) + (a * c)
+_·ˡ_ : m ⊸ n → Vec A m → Vec A n
+_·ˡ_ LM = f LM
 ~~~
 
 
-Proofs can be used to rewrite terms
------------------------------------
+How do we generate these proofs? By composing them!
+---------------------------------------------------
 
-Let's use the `Field` proofs we have to construct a new proof.
+We can prove `(b + 0ᶠ) * 1ᶠ ≡ b` from simpler (axiomatic) statements.
 
 <!--
 ```agda
 module _ ⦃ F : Field A ⦄ where
   open Field F
+
 ```
 -->
 
@@ -867,98 +755,80 @@ idₗ = record
 ```
 
 
-Proving that the `diag` function is linear
-------------------------------------------
+Linear functions can be composed!
+---------------------------------
 
-Now let's try to define the `diag` function as a linear function
-
-```agda
-diagₗ : ⦃ F : Field A ⦄ → Vec A n → n ⊸ n
-diagₗ d = record
-  { f = d *ⱽ_
-```
-
-. . .
-
-```agda
-  -- *ⱽ-distr-+ⱽ : d *ⱽ (u +ⱽ v) ≡ d *ⱽ u +ⱽ d *ⱽ v
-  ; f[u+v]≡f[u]+f[v] = λ u v → *ⱽ-distr-+ⱽ d u v
-```
-
-. . .
-
-```agda
-  -- *ⱽ∘ⱽ≡∘ⱽ*ⱽ : d *ⱽ (c ∘ⱽ v) ≡ c ∘ⱽ (d *ⱽ v)
-  ; f[c*v]≡c*f[v] = λ c v → *ⱽ∘ⱽ≡∘ⱽ*ⱽ c d v
-  }
-```
-
-Let's go through the linearity proof for `diag`
------------------------------------------------
-
-To prove linearity for `diag`, let's step through the proof.
+Linear functions can be composed as well, enabling more complex
+functions (and proofs!) to be generated from simpler parts.
 
 <!--
+
 ```agda
-module _ ⦃ F : Field A ⦄ where
-  open Field F
+-- f[u+v]≡f[u]+f[v] = _⊸_.f[u+v]≡f[u]+f[v]
+f[u+v]≡f[u]+f[v] = FLA.Algebra.LinearMap._⊸_.f[u+v]≡f[u]+f[v]
 ```
+
 -->
 
 ```agda
-  *ⱽ-distr-+ⱽ' : (d u v : Vec A n)
-              → d *ⱽ (u +ⱽ v) ≡ d *ⱽ u +ⱽ d *ⱽ v
+_∘ˡ_ : ⦃ F : Field A ⦄ → n ⊸ p → m ⊸ n → m ⊸ p
+g ∘ˡ h = record {
+    f = λ v → g ·ˡ (h ·ˡ v)
 ```
 
 . . .
 
 \undovspacepause
+
 ```agda
-  *ⱽ-distr-+ⱽ' []ⱽ []ⱽ []ⱽ = refl
-```
 
-. . .
-
-\undovspacepause
-```agda
-  *ⱽ-distr-+ⱽ' (d₀ ∷ⱽ dᵣ) (u₀ ∷ⱽ uᵣ) (v₀ ∷ⱽ vᵣ) = begin
-      (d₀ * (u₀ + v₀)) ∷ⱽ (dᵣ *ⱽ (uᵣ +ⱽ vᵣ))
-```
-
-. . .
-
-\undovspacepause
-```agda
-    ≡⟨ cong ((d₀ * (u₀ + v₀)) ∷ⱽ_) (*ⱽ-distr-+ⱽ' dᵣ uᵣ vᵣ) ⟩
+  -- g ·ˡ (h ·ˡ (u +ⱽ v)) ≡ g ·ˡᵐ (h ·ˡᵐ u) +ⱽ g ·ˡᵐ (h ·ˡᵐ v)
+  ; f[u+v]≡f[u]+f[v] = λ u v → begin
 ```
 . . .
 
 \undovspacepause
-```agda
-      (d₀ * (u₀ + v₀)) ∷ⱽ (dᵣ *ⱽ uᵣ +ⱽ dᵣ *ⱽ vᵣ)
-```
 
+```agda
+      g ·ˡ (h ·ˡ (u +ⱽ v))
+```
 . . .
 
 \undovspacepause
-```agda
-    ≡⟨ cong (_∷ⱽ (dᵣ *ⱽ uᵣ +ⱽ dᵣ *ⱽ vᵣ)) (*-distr-+ d₀ u₀ v₀) ⟩
-```
 
+```agda
+        ≡⟨ cong (g ·ˡ_) (f[u+v]≡f[u]+f[v] h u v) ⟩
+```
 . . .
 
 \undovspacepause
-```agda
-      (d₀ * u₀ + d₀ * v₀) ∷ⱽ (dᵣ *ⱽ uᵣ +ⱽ dᵣ *ⱽ vᵣ)
-```
 
+```agda
+      g ·ˡ (h ·ˡ u +ⱽ h ·ˡ v)
+```
 . . .
 
 \undovspacepause
+
 ```agda
-    ≡⟨⟩
-      (d₀ ∷ⱽ dᵣ) *ⱽ (u₀ ∷ⱽ uᵣ) +ⱽ (d₀ ∷ⱽ dᵣ) *ⱽ (v₀ ∷ⱽ vᵣ) ∎
+        ≡⟨ f[u+v]≡f[u]+f[v] g (h ·ˡᵐ u) (h ·ˡᵐ v) ⟩
 ```
+. . .
+
+\undovspacepause
+
+```agda
+      g ·ˡᵐ (h ·ˡᵐ u) +ⱽ g ·ˡᵐ (h ·ˡᵐ v) ∎
+```
+. . .
+
+\undovspacepause
+
+```agda
+  ; f[c*v]≡c*f[v] = Homework }
+
+```
+
 
 
 How we can finally define LinearMatrix!
@@ -966,10 +836,10 @@ How we can finally define LinearMatrix!
 
 We can finally define a matrix made up of linear functions.
 
-~~~agda
+```agda
 data LinearMatrix {A : Set} ⦃ F : Field A ⦄ (m n : ℕ) : Set where
   ConstructLinearMatrix : (n ⊸ m) → (m ⊸ n) → LinearMatrix m n
-~~~
+```
 
 ```agda
 id-linear : ⦃ F : Field A ⦄ → LinearMatrix n n
@@ -986,6 +856,14 @@ Does the transpose match?
 
 Say we defined a matrix as so
 
+<!--
+
+```agda
+diagₗ = FLA.Algebra.LinearMap.diagₗₘ
+```
+
+-->
+
 ```agda
 Mₙₒ : ⦃ F : Field A ⦄ → LinearMatrix n n
 Mₙₒ = ConstructLinearMatrix (idₗ) (diagₗ (replicate 0ᶠ))
@@ -1000,15 +878,12 @@ Mₙₒ = ConstructLinearMatrix (idₗ) (diagₗ (replicate 0ᶠ))
 
 . . .
 
-We have mixed up the forward/transpose pairing between our two linear functions.
+We have mixed up the forward/transpose pairing.
 
 \undovspacepause
 \undovspacepause
 $$
-\begin{aligned}
-I & = I^T\\
-diag(v) & = diag(v)^T
-\end{aligned}
+I^T \neq diag(v)
 $$
 
 . . .
@@ -1026,8 +901,8 @@ $$
 $$
 
 
-Finally we reach our goal!
---------------------------
+Finally we reach our goal of correct by construction matrices!
+--------------------------------------------------------------
 
 If we require the user to prove the inner product property, we can _finally_
 create a "correct by construction" functional matrix.
@@ -1037,7 +912,7 @@ data Mat_×_ {A : Set} ⦃ F : Field A ⦄ (m n : ℕ) : Set where
   ⟦_,_,_⟧ :  (M  : n ⊸ m )
           → (Mᵀ : m ⊸ n )
           → (p : (x : Vec A m) → (y : Vec A n)
-                → ⟨ x , M ·ˡᵐ y ⟩ ≡ ⟨ y , Mᵀ ·ˡᵐ x ⟩ )
+                → ⟨ x , M ·ˡ y ⟩ ≡ ⟨ y , Mᵀ ·ˡ x ⟩ )
           → Mat m × n
 ~~~
 
@@ -1075,10 +950,30 @@ Mᴵ = ⟦ idₗ , idₗ , id-transpose  ⟧
 
 ```agda
     id-transpose x y = begin
-      ⟨ x , id y ⟩ ≡⟨⟩
-      ⟨ x , y ⟩    ≡⟨ ⟨⟩-comm x y ⟩
-      ⟨ y , x ⟩    ≡⟨⟩
-      ⟨ y , id x ⟩ ∎
+```
+
+\undovspacepause
+
+```agda
+                       ⟨ x , id y ⟩
+```
+
+\undovspacepause
+
+```agda
+      ≡⟨⟩              ⟨ x , y ⟩
+```
+
+\undovspacepause
+
+```agda
+      ≡⟨ ⟨⟩-comm x y ⟩ ⟨ y , x ⟩
+```
+
+\undovspacepause
+
+```agda
+      ≡⟨⟩              ⟨ y , id x ⟩ ∎
 ```
 
 What can we do with a matrix
@@ -1090,53 +985,7 @@ We can do a few things with a matrix:
 2. Transform the matrix to get a new matrix (transpose): $M^Tx$
 3. Combine matrices (matrix-matrix multiply): $M_1 * M_2$
 
-. . .
-
-We have not done matrix-matrix multiplication, can we implement it with our
-new definition?
-
-<!--
-```agda
-iterate : ℕ → A → (A → A) → List A
-iterate 0 x f = x ∷ []
-iterate (suc n) x f = x ∷ iterate n (f x) f
-
-_·_ = _·ᴹₗ_
-_·ˡ_ = _·ˡᵐ_
-
-infixr 20 _·_
-
-postulate
-  TrustMe! : A
-```
--->
-
-
-Implementing matrix-matrix multiply on functional matrices
-----------------------------------------------------------
-
-Previously, we were able to define matrix-matrix multiplication
-
-\undovspacepause
-$$
-M_1 * M_2
-$$
-
-using function composition
-
-~~~agda
-apply_two_matrices : FunctionalMatrix A → FunctionalMatrix A
-                   → List A → List A
-apply_two_matrices F G v = F ·ᶠ G ·ᶠ v
-
-_∘ᶠ_ : FunctionalMatrix A → FunctionalMatrix A → FunctionalMatrix A
-F ∘ᶠ G = ConstructFunctionalMatrix (apply_two_matrices F G)
-~~~
-
-. . .
-
-We can do the same with our new definition, by performing composition of the
-linear functions.
+Let's see how to implement all of these operations.
 
 
 Matrix-matrix multiply toolbox: function extraction
@@ -1158,32 +1007,17 @@ running `Mat-to-⊸`.
 ```agda
 _ᵀ : ⦃ F : Field A ⦄ → Mat m × n → Mat n × m
 ⟦ f , a , p ⟧ ᵀ = ⟦ a , f , (λ x y → sym (p y x)) ⟧
+-- To generate the Mat inner product proof, we
+-- need to prove ⟨ x , a ·ˡᵐ y ⟩ ≡ ⟨ y , f ·ˡᵐ x ⟩
+-- p y x is      ⟨ y , f ·ˡᵐ x ⟩ ≡ ⟨ x , a ·ˡᵐ y ⟩
 ```
+
 <!--
 ```agda
 infixl 25 _ᵀ
 ```
 -->
 
-
-Matrix-matrix multiply toolbox: linear function composition
------------------------------------------------------------
-
-And we need to compose linear functions to compose the functions in matrices.
-
-```agda
-_∘ˡ_ : ⦃ F : Field A ⦄ → n ⊸ p → m ⊸ n → m ⊸ p
-g ∘ˡ h = record {
-    f = λ v → g ·ˡ (h ·ˡ v)
-```
-
-. . .
-
-\undovspacepause
-```agda
-  ; f[u+v]≡f[u]+f[v] = TrustMe!
-  ; f[c*v]≡c*f[v] = TrustMe! }
-```
 
 
 Defining matrix-matrix multiply
@@ -1206,15 +1040,17 @@ Which we can directly encode in Agda.
 
 ```agda
 _*ᴹ_ : ⦃ F : Field A ⦄ → Mat m × n → Mat n × p → Mat m × p
-M₁ *ᴹ M₂ =
-  ⟦ (Mat-to-⊸ M₁) ∘ˡ (Mat-to-⊸ M₂)
-  , (Mat-to-⊸ (M₂ ᵀ)) ∘ˡ (Mat-to-⊸ (M₁ ᵀ))
+M₂ *ᴹ M₁ =
+  ⟦ (Mat-to-⊸ M₂) ∘ˡ (Mat-to-⊸ M₁)
+  , (Mat-to-⊸ (M₁ ᵀ)) ∘ˡ (Mat-to-⊸ (M₂ ᵀ))
 ```
 
 . . .
 
+\undovspacepause
+
 ```agda
-  , TrustMe!
+  , MoreHomework!
   ⟧
 ```
 
@@ -1260,14 +1096,17 @@ We gain a few benefits from using functions directly.
 :::
 
 
-Magnetic Particle Imaging reconstructs images using functional matrices
------------------------------------------------------------------------
+Magnetic Particle Imaging can be modeled using linear algebra
+-------------------------------------------------------------
 
-A model of how the device (left) generates signals from the sample (rat,
-right) is encoded as "matrix-free" functions in Python using PyOp, the
-python implementation of this idea.
+In MPI, we are attempting to detect where iron is within a sample.
 
-![](fig/mpi.png)
+\undovspacepause
+- $v$\ : the voltages coming off of the device.
+- $f_e$\ : the distribution of iron.
+- $M$\ : a _function_ that converts iron distributions into voltages.
+
+![](fig/mpi-M.png)
 
 
 Matrix-free methods enable significant time and space savings
@@ -1283,19 +1122,6 @@ matrix-free method.
 Space                        150 GB     bytes       $10^9x$
 Time                         60 min     2 min        $30x$
 Use of functional concepts     No        Yes       Priceless
-
-
-Magnetic Particle Imaging can be modeled using linear algebra
--------------------------------------------------------------
-
-In MPI, we are attempting to detect where iron is within a sample.
-
-\undovspacepause
-- $v$\ : the voltages coming off of the device.
-- $f_e$\ : the distribution of iron.
-- $M$\ : a _function_ that converts iron distributions into voltages.
-
-![](fig/mpi-M.png)
 
 
 Solving linear equations finds what input produces an observed result
@@ -1327,37 +1153,7 @@ $$
 Taking a `step` in the right direction
 --------------------------------------
 
-One simple way to find a better $f_e$ than some initial guess is to update $f_e$
-_in the direction of steepest descent $\nabla J$_.
-
-$$
-\begin{aligned}
-f_{e,i+1} & = f_{e,i} - \alpha \nabla J (f_{e,i}) \\
-f_{e,i+1} & = f_{e,i} - \alpha (M^T (M f_{e,i} - v))
-\end{aligned}
-$$
-
-. . .
-
-We can implement this in Agda as
-
-```agda
-step :  ⦃ F : Field A ⦄
-     → (α : A) → (M : Mat m × n)
-     → (v : Vec A m) → (fₑ : Vec A n) → Vec A n
-step α M v = λ fₑ → fₑ -ⱽ α ∘ⱽ (M ᵀ · (M · fₑ -ⱽ v))
-```
 <!--
-```agda
-  where
-    open Field {{...}}
-```
--->
-
-Gradient descent is just running `step` a bunch of times
---------------------------------------------------------
-
-From there, we can find the value of $f_e$ that best matches $v$ by iterating.
 
 ```agda
 gradient-descent :  ⦃ F : Field A ⦄
@@ -1367,46 +1163,80 @@ gradient-descent :  ⦃ F : Field A ⦄
                  → (v : Vec A m)   -- Data
                  → (fₑ : Vec A n)  -- Initial estimate
                  → List (Vec A n)  -- Results (farther is better)
+
+postulate
+  M-distr--ⱽ : ⦃ F : Field A ⦄ → (M : Mat m × n) → (u v : Vec A n) → M · (u -ⱽ v) ≡ M · u -ⱽ M · v
+```
+
+-->
+
+One simple way to find a better $f_e$ than some initial guess is to update $f_e$
+_in the direction of steepest descent $\nabla J$_.
+
+\undovspacepause
+\undovspacepause
+$$
+f_{e,i+1} = f_{e,i} - \alpha \nabla J (f_{e,i}) = f_{e,i} - \alpha (M^T (M f_{e,i} - v))
+$$
+
+. . .
+
+We can implement this in Agda as
+
+```agda
+step :  ⦃ F : Field A ⦄ → (α : A) → (M : Mat m × n)
+     → (v : Vec A m) → (fₑ : Vec A n) → Vec A n
+step α M v = λ fₑ → fₑ -ⱽ α ∘ⱽ (M ᵀ · (M · fₑ -ⱽ v))
+```
+
+. . .
+
+Finding an optimal `fₑ` is running `step` many times
+
+```agda
 gradient-descent n α M v fₑ = iterate n fₑ (step α M v)
 -- iterate _ x f = [x, f x, f (f x), ... ]
 ```
 
 <!--
 ```agda
-postulate
-  M-distr--ⱽ : ⦃ F : Field A ⦄ → (M : Mat m × n) → (u v : Vec A n) → M · (u -ⱽ v) ≡ M · u -ⱽ M · v
+  where
+    open Field {{...}}
 ```
 -->
 
 
-We cna define equivalent forms of a linear equation
+We can define equivalent forms of a linear equation
 ---------------------------------------------------
 
 We had defined our step function as
 
 ~~~agda
-step α M v fₑ = fₑ -ⱽ α ∘ⱽ (M ᵀ · (M · fₑ -ⱽ v))
+step α M v fₑ  = fₑ -ⱽ α ∘ⱽ (M ᵀ · (M · fₑ -ⱽ v))
 ~~~
 
 is there another way to write this function?
 
 . . .
 
-yes!
-
+<!--
 ```agda
 step' :  ⦃ F : Field A ⦄
       → (α : A) → (M : Mat m × n)
       → (v : Vec A m) → (fₑ : Vec A n) → Vec A n
+```
+-->
+
+```agda
 step' α M v fₑ = fₑ -ⱽ α ∘ⱽ (M ᵀ · M · fₑ -ⱽ M ᵀ · v)
 ```
 
 
-Proving the two `step`s are in lock step
----------------------------------------
+Proving the two `step`s are in lock step for better performance
+---------------------------------------------------------------
 
 We can prove `step` and `step'` are the same by demonstrating
-that the same inputs to `step` and `step'` lead to the same result.[^4]
+that the same inputs to `step` and `step'` lead to the same result.
 
 ```agda
 proof :  ⦃ F : Field A ⦄ → (α : A)
@@ -1424,8 +1254,9 @@ proof α M v fₑ = begin
   fₑ -ⱽ α ∘ⱽ (M ᵀ · M · fₑ -ⱽ M ᵀ · v) ∎
 ```
 
-[^4]: Proving that `step` and `step'` are the same is an extensional
-statement, and requires function extensionality.
+. . .
+
+We can _rewrite/optimize our program while preserving correctness_.
 
 
 Have we accomplished our goal?
@@ -1458,7 +1289,7 @@ correctness built in.
 
 ::: incremental
 
-- Regular functions (Python: `PyOp` library)
+- Regular functions (Python: `PyOp`/`PyLops`/many other libraries)
 - Size-typed functions (Haskell: `convex` library)
 - Linear functions (Agda: `FLA` library)
 
@@ -1509,7 +1340,7 @@ presentation in Agda can be found at
 
 [github.com/ryanorendorff/functional-linear-algebra-talk](https://github.com/ryanorendorff/functional-linear-algebra-talk)
 
-The full library that implements this style (without `TrustMe!`) can be
+The full library that implements this style (without `Homework`) can be
 found at
 
 [github.com/ryanorendorff/functional-linear-algebra](https://github.com/ryanorendorff/functional-linear-algebra)
